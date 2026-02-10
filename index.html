@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pa">
 <head>
     <meta charset="UTF-8">
@@ -92,7 +92,6 @@
     </div>
 
     <script>
-        // Counters for file naming
         let ocrCount = 1;
         let plCount = 1;
         let transCount = 1;
@@ -106,17 +105,24 @@
 
         async function createDocx(paragraphsXml, filename) {
             const zip = new JSZip();
-            // 0.2 inch margins (approx 288 twips)
+            // 0.2 inch margins
             const marginXml = '<w:sectPr><w:pgMar w:top="288" w:right="288" w:bottom="288" w:left="288" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
             const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphsXml}${marginXml}</w:body></w:document>`;
             
             zip.file("word/document.xml", docXml);
             zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Target="word/document.xml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"/></Relationships>`);
             zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
-            const blob = await zip.generateAsync({type: "blob"});
+            
+            // FIX: Explicitly set MIME type to Word Document so Mobile doesn't see it as a Zip
+            const blob = await zip.generateAsync({
+                type: "blob", 
+                mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            });
+            
             const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob); a.download = filename; a.click();
-            // No screen lock
+            a.href = URL.createObjectURL(blob); 
+            a.download = filename; 
+            a.click();
         }
 
         function escapeXml(u) { return u.replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[c])); }
@@ -142,7 +148,6 @@
         };
 
         function downloadOcrDocx() {
-            // Naming: o_1.docx, o_2.docx...
             const xml = ocrTexts.map(t => `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:t>${escapeXml(t)}</w:t></w:r></w:p>`).join('');
             createDocx(xml, `o_${ocrCount++}.docx`);
         }
@@ -158,7 +163,6 @@
         }
 
         function processStory() {
-            // Naming: pl_1.docx, pl_2.docx...
             const sentences = splitSentences(document.getElementById('storyInput').value);
             const xml = sentences.map((s, i) => `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:t>${i+1}. ${escapeXml(s.trim())}.</w:t></w:r></w:p>`).join('');
             createDocx(xml, `pl_${plCount++}.docx`);
@@ -202,7 +206,6 @@
         }
 
         function downloadTransDocx() {
-            // Naming: t_1.docx, t_2.docx...
             const xml = translatedLines.map(item => 
                 `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:t>${escapeXml(item.english)}.</w:t></w:r></w:p>` + 
                 `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>${escapeXml(item.punjabi)}.</w:t></w:r></w:p>`

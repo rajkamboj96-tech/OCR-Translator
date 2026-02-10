@@ -1,0 +1,214 @@
+﻿<!DOCTYPE html>
+<html lang="pa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Master Suite: High-Speed & Precise</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <script src="https://unpkg.com/mammoth@1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        :root { 
+            --bg: #0d1117; --panel: #161b22; --accent: #238636; --text: #c9d1d9;
+            --blue: #1f6feb; --green: #238636; --purple: #8957e5; --border: #30363d;
+            --tab-inactive: #21262d;
+        }
+        body { font-family: 'Segoe UI', "Noto Sans Gurmukhi", sans-serif; margin: 0; background: var(--bg); color: var(--text); }
+        .tab-bar { background: #010409; display: flex; border-bottom: 2px solid #30363d; position: sticky; top: 0; z-index: 2000; }
+        .tab-btn { flex: 1; padding: 18px; cursor: pointer; border: none; background: var(--tab-inactive); color: #8b949e; font-weight: bold; transition: 0.3s; border-right: 1px solid #30363d; text-align: center; }
+        .tab-btn.active { color: white; }
+        .ocr-tab.active { background: var(--blue); }
+        .story-tab.active { background: var(--purple); }
+        .trans-tab.active { background: var(--green); }
+        .tab-content { display: none; padding: 20px; }
+        .tab-content.active { display: block; }
+        .btn { color: white; border: none; padding: 12px 24px; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .card-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+        .card { width: 140px; background: #21262d; border: 1px solid #30363d; border-radius: 8px; padding: 10px; }
+        .progress-bar { height: 6px; background: #30363d; border-radius: 10px; margin-top: 8px; overflow: hidden; }
+        .progress-fill { height: 100%; background: #58a6ff; width: 0%; transition: 0.2s; }
+        .trans-wrapper { max-width: 800px; margin: 20px auto; background: white; padding: 30px; border-radius: 12px; color: #333; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .upload-box { border: 2px dashed #3498db; border-radius: 10px; padding: 40px 20px; text-align: center; cursor: pointer; background: #fdfdfd; color: #333; }
+        #stopOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(13,17,23,0.98); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; }
+    </style>
+</head>
+<body>
+
+    <div class="tab-bar">
+        <button class="tab-btn ocr-tab active" onclick="openTab(event, 'ocrTab')">📷 BATCH OCR (5-Pages)</button>
+        <button class="tab-btn story-tab" onclick="openTab(event, 'storyTab')">📖 STORY SPLITTER</button>
+        <button class="tab-btn trans-tab" onclick="openTab(event, 'translateTab')">🌐 PUNJABI TRANSLATOR</button>
+    </div>
+
+    <div id="ocrTab" class="tab-content active">
+        <div style="display:flex; justify-content: space-between; align-items: center;">
+            <h2 id="ocrStatus">Ready (5x5 Batch)</h2>
+            <div style="display:flex; gap:10px;">
+                <input type="file" id="imageInput" accept="image/*" multiple>
+                <button id="saveOcrBtn" class="btn" style="background:var(--accent); display:none;" onclick="downloadOcrDocx()">📥 DOWNLOAD DOCX</button>
+            </div>
+        </div>
+        <div class="card-container" id="ocrMainContainer"></div>
+    </div>
+
+    <div id="storyTab" class="tab-content">
+        <div style="max-width: 900px; margin: auto;">
+            <h2 style="color: #fff; border-bottom: 2px solid var(--purple); padding-bottom: 10px;">📖 Story to Lines Splitter</h2>
+            <div style="background: #0d1117; padding: 20px; border-radius: 8px; border: 1px solid var(--border); display: flex; gap: 15px; align-items: center; margin-bottom: 20px;">
+                <button class="btn" style="background: var(--blue);" onclick="document.getElementById('storyFileIn').click()">📂 Open Word (.docx)</button>
+                <input type="file" id="storyFileIn" accept=".docx" hidden onchange="loadStoryFromDoc(this)">
+            </div>
+            <textarea id="storyInput" style="width:100%; height:350px; margin-bottom:20px; background:#0d1117; color:#58a6ff; padding:15px; border: 1px solid var(--border); border-radius: 8px;" placeholder="Full stops split lines. Abbreviations like etc. or 1. will not break lines..."></textarea>
+            <button class="btn" style="background: var(--purple); width:100%; margin-top:15px; padding: 18px;" onclick="processStory()">⚡ PROCESS & DOWNLOAD .DOCX</button>
+        </div>
+    </div>
+
+    <div id="translateTab" class="tab-content">
+        <div class="trans-wrapper">
+            <h1 style="text-align:center; color:#2c3e50;">DOCX ਤੋਂ ਪੰਜਾਬੀ ਅਨੁਵਾਦ</h1>
+            <div class="upload-box" onclick="document.getElementById('fileInput').click()">
+                <p id="uploadText">ਫਾਈਲ ਚੁਣਨ ਲਈ ਇੱਥੇ ਕਲਿੱਕ ਕਰੋ</p>
+                <input type="file" id="fileInput" accept=".docx" hidden>
+                <p id="fileNameDisplay" style="color: #27ae60; font-weight: bold; margin-top: 10px;"></p>
+            </div>
+            <div id="transProgressContainer" style="display:none; height:24px; background:#eee; margin: 15px 0; border-radius: 12px; overflow: hidden;">
+                <div id="transProgressBar" style="background:#2ecc71; color:white; text-align:center; width:0%; height:100%; font-weight: bold; line-height:24px;">0%</div>
+            </div>
+            <div id="loadingInfo" style="text-align:center; font-weight:bold; margin-bottom:10px;"></div>
+            <div style="text-align:center; margin-top:20px;">
+                <button class="btn" id="translateBtn" style="background:#27ae60; width:100%;" onclick="translateDocument()" disabled>ਤੇਜ਼ ਅਨੁਵਾਦ ਸ਼ੁਰੂ ਕਰੋ</button>
+                <button class="btn" id="downloadDocxBtn" style="background:#2b579a; width:100%; margin-top:10px;" onclick="downloadTransDocx()" disabled>Word (.docx) ਡਾਊਨਲੋਡ</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="stopOverlay">
+        <h1 style="color: white; font-size: 50px;">Finished!</h1>
+        <p style="color: #58a6ff; font-size: 24px;">Please Refresh the Page.</p>
+        <button class="btn" style="background: var(--blue); margin-top:20px;" onclick="location.reload()">Refresh Now</button>
+    </div>
+
+    <script>
+        // Counters for file naming
+        let ocrCount = 1;
+        let plCount = 1;
+        let transCount = 1;
+
+        function openTab(evt, tabName) {
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            evt.currentTarget.classList.add('active');
+        }
+
+        async function createDocx(paragraphsXml, filename) {
+            const zip = new JSZip();
+            // 0.2 inch margins (approx 288 twips)
+            const marginXml = '<w:sectPr><w:pgMar w:top="288" w:right="288" w:bottom="288" w:left="288" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>';
+            const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paragraphsXml}${marginXml}</w:body></w:document>`;
+            
+            zip.file("word/document.xml", docXml);
+            zip.file("_rels/.rels", `<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Target="word/document.xml" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"/></Relationships>`);
+            zip.file("[Content_Types].xml", `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+            const blob = await zip.generateAsync({type: "blob"});
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+            // No screen lock
+        }
+
+        function escapeXml(u) { return u.replace(/[<>&'"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;',"'":'&apos;','"':'&quot;'}[c])); }
+
+        // OCR Logic (Batch 5)
+        let ocrTexts = [];
+        document.getElementById('imageInput').onchange = async (e) => {
+            const files = Array.from(e.target.files);
+            document.getElementById('imageInput').style.display = "none";
+            for (let i = 0; i < files.length; i += 5) {
+                const batch = files.slice(i, i + 5);
+                const results = await Promise.all(batch.map(async (file, idx) => {
+                    const gIdx = i + idx;
+                    const card = document.createElement('div'); card.className = 'card';
+                    card.innerHTML = `<div class="progress-bar"><div id="bar-${gIdx}" class="progress-fill"></div></div>`;
+                    document.getElementById('ocrMainContainer').appendChild(card);
+                    const res = await Tesseract.recognize(file, 'eng', { logger: m => { if(m.status==='recognizing text') document.getElementById(`bar-${gIdx}`).style.width = (m.progress*100)+"%"; } });
+                    return res.data.text;
+                }));
+                ocrTexts.push(...results);
+            }
+            document.getElementById('saveOcrBtn').style.display = "block";
+        };
+
+        function downloadOcrDocx() {
+            // Naming: o_1.docx, o_2.docx...
+            const xml = ocrTexts.map(t => `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:t>${escapeXml(t)}</w:t></w:r></w:p>`).join('');
+            createDocx(xml, `o_${ocrCount++}.docx`);
+        }
+
+        // Story Splitter (Full-Stop Rule)
+        function splitSentences(text) {
+            return text.split(/(?<!\d|etc|Mr|Dr|Ms|Prof|Sr|Jr|St|Inc|Ltd)\s*[\.\!\?]+\s+/).filter(s => s.trim().length > 0);
+        }
+
+        async function loadStoryFromDoc(input) {
+            const res = await mammoth.extractRawText({ arrayBuffer: await input.files[0].arrayBuffer() });
+            document.getElementById('storyInput').value = res.value.trim();
+        }
+
+        function processStory() {
+            // Naming: pl_1.docx, pl_2.docx...
+            const sentences = splitSentences(document.getElementById('storyInput').value);
+            const xml = sentences.map((s, i) => `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:t>${i+1}. ${escapeXml(s.trim())}.</w:t></w:r></w:p>`).join('');
+            createDocx(xml, `pl_${plCount++}.docx`);
+        }
+
+        // --- Translation Logic ---
+        let originalLines = [];
+        let translatedLines = [];
+        const BATCH_SIZE = 30;
+
+        document.getElementById('fileInput').onchange = async (e) => {
+            const file = e.target.files[0];
+            document.getElementById('fileNameDisplay').innerText = `ਚੁਣੀ ਗਈ ਫਾਈਲ: ${file.name}`;
+            const res = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+            originalLines = splitSentences(res.value.replace(/\n/g, ' '));
+            document.getElementById('translateBtn').disabled = false;
+        };
+
+        async function translateDocument() {
+            document.getElementById('transProgressContainer').style.display = 'block';
+            const progBar = document.getElementById('transProgressBar');
+            const loadInfo = document.getElementById('loadingInfo');
+            translatedLines = [];
+
+            for (let i = 0; i < originalLines.length; i += BATCH_SIZE) {
+                const batch = originalLines.slice(i, i + BATCH_SIZE);
+                loadInfo.textContent = `ਪ੍ਰੋਸੈਸਿੰਗ: ${i+1}...`;
+                const results = await Promise.all(batch.map(async (text) => {
+                    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=pa&dt=t&q=${encodeURIComponent(text)}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    return data[0][0][0];
+                }));
+                results.forEach((trans, idx) => translatedLines.push({ english: batch[idx], punjabi: trans }));
+                const percent = Math.round((translatedLines.length / originalLines.length) * 100);
+                progBar.style.width = percent + "%";
+                progBar.textContent = percent + "%";
+            }
+            loadInfo.textContent = "ਅਨੁਵਾਦ ਮੁਕੰਮਲ!";
+            document.getElementById('downloadDocxBtn').disabled = false;
+        }
+
+        function downloadTransDocx() {
+            // Naming: t_1.docx, t_2.docx...
+            const xml = translatedLines.map(item => 
+                `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:t>${escapeXml(item.english)}.</w:t></w:r></w:p>` + 
+                `<w:p><w:pPr><w:spacing w:after="0" w:line="240" w:lineRule="auto"/></w:pPr><w:r><w:rPr><w:color w:val="FF0000"/></w:rPr><w:t>${escapeXml(item.punjabi)}.</w:t></w:r></w:p>`
+            ).join('');
+            createDocx(xml, `t_${transCount++}.docx`);
+        }
+    </script>
+</body>
+</html>
